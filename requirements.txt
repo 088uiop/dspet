@@ -1,0 +1,7 @@
+PySide6>=6.5
+requests
+psutil
+pynvml
+
+# 只有做新衣服（make_sprites.py）才需要：
+Pillow

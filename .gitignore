@@ -1,0 +1,15 @@
+# 运行时生成
+config.json
+__pycache__/
+*.pyc
+
+# 打包产物
+build/
+dist/
+# PyInstaller 自己生成的 spec 忽略，项目自带这份要跟踪
+*.spec
+!dspet.spec
+
+# 我自己的杂物
+.venv/
+zones-preview.png
