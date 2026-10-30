@@ -2,6 +2,7 @@
 config.json
 __pycache__/
 *.pyc
+.deps-ok
 
 # 打包产物
 build/
