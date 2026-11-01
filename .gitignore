@@ -1,5 +1,5 @@
-# 运行时生成
-config.json
+# 运行时生成（只忽略根目录这份设置文件，衣服目录里的部位 config.json 要进版本库）
+/config.json
 __pycache__/
 *.pyc
 .deps-ok

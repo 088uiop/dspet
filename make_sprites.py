@@ -31,17 +31,21 @@ SIZES = [187, 238, 306]          # 0.55 / 0.7 / 0.9 三档
 VIEWS = ["正面", "侧面", "背面"]
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-ZONE_TEMPLATE = {
-    "头部": {"x": {"min": 0.01, "max": 0.98}, "y": {"min": 0.11, "max": 0.55}},
-    "胸部": {"x": {"min": 0.37, "max": 0.59}, "y": {"min": 0.55, "max": 0.68}},
-    "手臂": [
+# 部位模板：最外层是数组，每个部位一个元素；数组顺序就是优先级（越靠前越优先）
+ZONE_TEMPLATE = [
+    {"name": "头部", "rects": [{"x": {"min": 0.01, "max": 0.98}, "y": {"min": 0.11, "max": 0.55}}]},
+    {"name": "胸部", "rects": [{"x": {"min": 0.37, "max": 0.59}, "y": {"min": 0.55, "max": 0.68}}]},
+    {"name": "手臂", "rects": [
         {"x": {"min": 0.20, "max": 0.37}, "y": {"min": 0.59, "max": 0.77}},
         {"x": {"min": 0.59, "max": 0.75}, "y": {"min": 0.59, "max": 0.77}},
-    ],
-    "腿脚": {"x": {"min": 0.34, "max": 0.62}, "y": {"min": 0.88, "max": 0.99}},
-    "尾巴": {"x": {"min": 0.75, "max": 0.95}, "y": {"min": 0.69, "max": 0.85}},
-    "肚子": {"x": {"min": 0.34, "max": 0.62}, "y": {"min": 0.68, "max": 0.88}},
-}
+    ]},
+    {"name": "腿脚", "rects": [{"x": {"min": 0.34, "max": 0.62}, "y": {"min": 0.88, "max": 0.99}}]},
+    {"name": "尾巴", "rects": [{"x": {"min": 0.75, "max": 0.95}, "y": {"min": 0.69, "max": 0.85}}]},
+    {"name": "肚子", "rects": [{"x": {"min": 0.34, "max": 0.62}, "y": {"min": 0.68, "max": 0.88}}]},
+]
+PREVIEW_COLORS = [(255, 99, 99), (255, 190, 80), (120, 220, 140),
+                  (110, 170, 255), (200, 130, 255), (90, 230, 230),
+                  (255, 230, 120), (150, 255, 200)]
 
 
 def cutout(path):
@@ -116,7 +120,7 @@ def premult_resize(im, height):
 
 
 def draw_preview(out_dir):
-    """在正面图上把部位区域画出来，方便对着调 config.json 的比例。"""
+    """在正面图上把部位区域画出来（读这套衣服的 config.json），方便对着调比例。"""
     src = os.path.join(out_dir, "正面.png")
     if not os.path.exists(src):
         return None
@@ -125,14 +129,28 @@ def draw_preview(out_dir):
     canvas = Image.new("RGBA", (w, h), (18, 24, 36, 255))
     canvas.alpha_composite(im)
     d = ImageDraw.Draw(canvas)
-    colors = {"头部": (255, 99, 99), "胸部": (255, 190, 80), "手臂": (120, 220, 140),
-              "腿脚": (110, 170, 255), "尾巴": (200, 130, 255), "肚子": (90, 230, 230)}
-    for name, spec in ZONE_TEMPLATE.items():
-        boxes = spec if isinstance(spec, list) else [spec]
-        for b in boxes:
-            x0, x1 = b["x"]["min"] * w, b["x"]["max"] * w
-            y0, y1 = b["y"]["min"] * h, b["y"]["max"] * h
-            c = colors.get(name, (255, 255, 255))
+    zones = ZONE_TEMPLATE
+    try:
+        with open(os.path.join(out_dir, "config.json"), "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+        if isinstance(loaded, list) and loaded:
+            zones = loaded
+    except Exception:
+        pass
+    for i, entry in enumerate(zones):
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or "")
+        rects = entry.get("rects") or []
+        if isinstance(rects, dict):
+            rects = [rects]
+        c = PREVIEW_COLORS[i % len(PREVIEW_COLORS)]
+        for b in rects:
+            try:
+                x0, x1 = b["x"]["min"] * w, b["x"]["max"] * w
+                y0, y1 = b["y"]["min"] * h, b["y"]["max"] * h
+            except Exception:
+                continue
             d.rectangle([x0, y0, x1, y1], outline=c, width=2)
             d.text((x0 + 3, max(0, y0 + 2)), name, fill=c)
     path = os.path.join(out_dir, "zones-preview.png")
@@ -172,7 +190,8 @@ def main():
         print("写了部位模板：" + cfg + "（记得按自己的图改比例）")
         print("标部位推荐用配套网页工具 image-part-annotator："
               "https://github.com/088uiop/image-part-annotator")
-        print("用它打开刚生成的 正面.png 框选六个部位，导出的 config.json 直接放进本目录。")
+        print("用它打开刚生成的 正面.png 框选部位（名字随你起），导出的 config.json 直接放进本目录；")
+        print("数组顺序就是优先级，越靠上的部位在重叠时越优先。")
 
     if args.icon:
         base = Image.open(os.path.join(out, "正面.png")).convert("RGBA")

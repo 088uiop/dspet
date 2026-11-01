@@ -84,39 +84,45 @@ MARGIN = 4
 SIZE_LEVELS = {"小": 0.55, "中": 0.7, "大": 0.9}
 SPEED = 380.0
 TICK = 20
-PART_LABELS = {'head': '头', 'chest': '胸', 'belly': '肚子', 'hand': '手', 'foot': '脚', 'tail': '尾巴'}
-# 衣服目录 config.json 里的中文部位名 → 内部 key
-PART_KEYS = {"头部": "head", "胸部": "chest", "手臂": "hand", "腿脚": "foot", "尾巴": "tail", "肚子": "belly",
-             # 常见变体也认：用标注工具自己起名时写短一点不会静默失效
-             "头": "head", "脸": "head", "胸": "chest", "身体": "chest", "手": "hand",
-             "手臂左": "hand", "手臂右": "hand", "腿": "foot", "脚": "foot", "腿脚": "foot",
-             "尾": "tail", "肚子": "belly", "腹部": "belly", "肚皮": "belly"}
-# 没有 config.json 时的兜底分区（旧版写死的那套）
+# 没有 config.json 时的兜底分区（部位名就是摸它时用的 key，跟 config.json 里的 name 一致）
 DEFAULT_ZONES = [
-    ('head', 0.0, 1.0, 0.0, 0.55),
-    ('chest', 0.35, 0.65, 0.55, 0.70),
-    ('hand', 0.20, 0.35, 0.55, 0.75),
-    ('hand', 0.65, 0.80, 0.55, 0.75),
-    ('foot', 0.35, 0.65, 0.85, 1.0),
-    ('tail', 0.70, 0.92, 0.70, 0.85),
-    ('belly', 0.35, 0.65, 0.70, 0.85),
+    ('头部', 0.0, 1.0, 0.0, 0.55),
+    ('胸部', 0.35, 0.65, 0.55, 0.70),
+    ('手臂', 0.20, 0.35, 0.55, 0.75),
+    ('手臂', 0.65, 0.80, 0.55, 0.75),
+    ('腿脚', 0.35, 0.65, 0.85, 1.0),
+    ('尾巴', 0.70, 0.92, 0.70, 0.85),
+    ('肚子', 0.35, 0.65, 0.70, 0.85),
 ]
 
 
 def load_zones(out_dir):
-    """读衣服目录下的 config.json（身体分区）；没有或读坏了就用 DEFAULT_ZONES。"""
+    """读衣服目录下的 config.json（身体分区）；没有或读坏了就用 DEFAULT_ZONES。
+
+    格式最外层是数组，每个元素是一个部位：
+        [{"name": "手臂", "rects": [{"x": {"min": .., "max": ..}, "y": {...}}, ...]}, ...]
+    部位名随你起，数组顺序就是点击优先级：越靠前越优先（重叠时算前一个）。
+    """
+    path = os.path.join(out_dir, "config.json")
     try:
-        with open(os.path.join(out_dir, "config.json"), "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             raw = json.load(f)
     except Exception:
         return list(DEFAULT_ZONES)
+    if isinstance(raw, dict):
+        print("部位 config.json 还是旧版字典格式，请用标注工具重新导出数组格式：" + path)
+        return list(DEFAULT_ZONES)
     zones = []
-    for name, spec in raw.items():
-        part = PART_KEYS.get(str(name))
-        if not part:
+    for entry in raw if isinstance(raw, list) else []:
+        if not isinstance(entry, dict):
             continue
-        boxes = spec if isinstance(spec, list) else [spec]
-        for b in boxes:
+        name = str(entry.get("name") or "").strip()
+        if not name:
+            continue
+        rects = entry.get("rects") or []
+        if isinstance(rects, dict):
+            rects = [rects]
+        for b in rects:
             try:
                 x0 = float(b["x"]["min"])
                 x1 = float(b["x"]["max"])
@@ -124,12 +130,12 @@ def load_zones(out_dir):
                 y1 = float(b["y"]["max"])
             except Exception:
                 continue
-            zones.append((part, min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1)))
+            zones.append((name, min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1)))
     return zones or list(DEFAULT_ZONES)
 
 
 def zone_part(zones, rx, ry):
-    """按 config.json 的顺序先命中先算。"""
+    """按数组顺序先命中先算：越靠上的部位优先级越高。"""
     for part, x0, x1, y0, y1 in zones:
         if x0 <= rx <= x1 and y0 <= ry <= y1:
             return part
@@ -167,14 +173,14 @@ DEFAULT_LINES = {
         "放我下来！……好吧，再玩一次。",
         "晕鱼了晕鱼了……",
     ],
-    # 摸不同部位说不同的话：部位 key 对应 PART_LABELS
+    # 摸不同部位说不同的话：key 就是衣服 config.json 里的部位名（随你起，没配就夸一句部位名）
     "touch": {
-        "head": ["别摸头，发型会乱！", "唔……这里可以再摸两下。", "摸头不加分，摸鱼才加分。"],
-        "chest": ["你手往哪儿放呢！", "停停停，这是要扣钱的。", "心跳都被你听去了。"],
-        "belly": ["痒！别戳肚子！", "这圈是加班长的，不许笑。", "肚皮是禁区，说了多少次了。"],
-        "hand": ["握个手，合作愉快。", "手短，够不着你。", "牵一下？就一下啊。"],
-        "foot": ["别踩我脚！", "走累了，歇会儿。", "脚底板也是肉长的。"],
-        "tail": ["尾巴不能拽！", "尾巴是传感器，很贵的。", "甩你一脸哦。"],
+        "头部": ["别摸头，发型会乱！", "唔……这里可以再摸两下。", "摸头不加分，摸鱼才加分。"],
+        "胸部": ["你手往哪儿放呢！", "停停停，这是要扣钱的。", "心跳都被你听去了。"],
+        "肚子": ["痒！别戳肚子！", "这圈是加班长的，不许笑。", "肚皮是禁区，说了多少次了。"],
+        "手臂": ["握个手，合作愉快。", "手短，够不着你。", "牵一下？就一下啊。"],
+        "腿脚": ["别踩我脚！", "走累了，歇会儿。", "脚底板也是肉长的。"],
+        "尾巴": ["尾巴不能拽！", "尾巴是传感器，很贵的。", "甩你一脸哦。"],
     },
     # 没配 API 就点开聊天框时说的话
     "no_api": ["还没给我配 API，右键 →「聊天设置」填一下？", "现在只会说台词，配个 API 就能聊天了。"],
@@ -456,7 +462,7 @@ class PetWindow(QWidget):
         # 聊天暂停标志
         self.chat_paused = False
         
-        # 单击延迟判定（等双击）：单击=打开聊天框，双击=摸她（头/胸/肚子/手/脚）
+        # 单击延迟判定（等双击）：单击=打开聊天框，双击=摸她（部位名由衣服 config.json 自定义）
         self._click_local = None
         self._suppress_click = False
         self.last_touch_tick = -9999
@@ -1050,7 +1056,7 @@ class PetWindow(QWidget):
             self.last_line = ""   # 同一个部位连摸也要有反馈，绕开气泡去重
             self.say(random.choice(pool))
         else:
-            self.say("你摸到我的" + PART_LABELS.get(part, part) + "了")
+            self.say("你摸到我的" + part + "了")
 
     def _sprite_box(self):
         """精灵图片落在窗口里的矩形 (left, top, w, h)；取不到就 None。"""
@@ -1064,7 +1070,7 @@ class PetWindow(QWidget):
         return (self.width() / 2.0 - pw / 2.0, bottom - ph, pw, ph)
 
     def _body_part_at(self, local):
-        """把点击位置换算成身体部位：head / chest / belly / hand / foot / tail。"""
+        """把点击位置换算成身体部位，返回 config.json 里写的部位名。"""
         box = self._sprite_box()
         if box is None:
             return ''
