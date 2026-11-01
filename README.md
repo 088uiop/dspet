@@ -227,7 +227,6 @@ dspet/
     ├── icon.png
     └── clothes/
         ├── 女仆装/     正面 侧面 背面 + 三档尺寸 + config.json
-        ├── 休闲装/
         └── 水手装/
 ```
 
