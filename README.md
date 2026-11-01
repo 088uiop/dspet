@@ -227,7 +227,7 @@ dspet/
     ├── icon.png
     └── clothes/
         ├── 女仆装/     正面 侧面 背面 + 三档尺寸 + config.json
-        └── 水手装/
+        └── 休闲装/
 ```
 
 ## 打包成 exe
